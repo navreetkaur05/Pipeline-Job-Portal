@@ -1,8 +1,12 @@
-import "dotenv/config";
+import dotenv from "dotenv";
 import express from "express";
 import cors from "cors";
-import mongoose from "mongoose";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import authRoutes from "./routes/authRoutes.js";
 import applicationRoutes from "./routes/applicationRoutes.js";
+
+dotenv.config({ path: resolve(dirname(fileURLToPath(import.meta.url)), ".env") });
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -14,6 +18,7 @@ app.get("/", (req, res) => {
   res.json({ message: "Pipeline API is running" });
 });
 
+app.use("/api/auth", authRoutes);
 app.use("/api/applications", applicationRoutes);
 
 app.use((req, res) => {
@@ -24,34 +29,17 @@ app.use((error, req, res, next) => {
   if (error.type === "entity.parse.failed") {
     return res.status(400).json({ message: "Request body must contain valid JSON." });
   }
-
-  if (error.name === "ValidationError") {
-    return res.status(400).json({
-      message: "Application validation failed.",
-      errors: Object.values(error.errors).map((item) => item.message)
-    });
+  if (res.headersSent) {
+    return next(error);
   }
-
-  if (error.name === "CastError") {
-    return res.status(400).json({ message: "Invalid application data." });
-  }
-
   console.error(error);
   res.status(500).json({ message: "An unexpected server error occurred." });
 });
 
-const startServer = async () => {
-  try {
-    await mongoose.connect(
-      process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/pipeline"
-    );
-    app.listen(PORT, () => {
-      console.log(`Backend running at http://localhost:${PORT}`);
-    });
-  } catch (error) {
-    console.error("Could not connect to MongoDB:", error);
-    process.exitCode = 1;
-  }
-};
+if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
+  throw new Error("JWT_SECRET must be set to a secret with at least 32 characters.");
+}
 
-startServer();
+app.listen(PORT, () => {
+  console.log(`Backend running at http://localhost:${PORT}`);
+});

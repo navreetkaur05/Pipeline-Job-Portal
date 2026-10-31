@@ -1,10 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
 import { Plus, Search, BriefcaseBusiness, GraduationCap, BookOpen, RefreshCw } from "lucide-react";
 import Header from "./components/Header.jsx";
+import AuthPage from "./components/AuthPage.jsx";
 import ApplicationCard from "./components/ApplicationCard.jsx";
 import ApplicationDetails from "./components/ApplicationDetails.jsx";
 import AddApplicationForm from "./components/AddApplicationForm.jsx";
-import { getApplications, getApplicationById, createApplication } from "./api/applicationApi.js";
+import OpportunitiesPage from "./components/OpportunitiesPage.jsx";
+import ResumePage from "./components/ResumePage.jsx";
+import {
+  createApplication,
+  getApplicationById,
+  getApplications,
+  loginUser,
+  registerUser
+} from "./api/applicationApi.js";
 
 const tabs = [
   { label: "All applications", value: "All", icon: BriefcaseBusiness },
@@ -14,14 +23,19 @@ const tabs = [
 ];
 
 const filters = ["All statuses", "Applied", "Under Review", "Shortlisted", "Rejected"];
+const pageSize = 3;
 
 export default function App() {
+  const [token, setToken] = useState(() => localStorage.getItem("pipelineToken"));
+  const [email, setEmail] = useState(() => localStorage.getItem("pipelineEmail") || "");
+  const [currentPage, setCurrentPage] = useState("applications");
   const [applications, setApplications] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [selectedApplication, setSelectedApplication] = useState(null);
   const [activeTab, setActiveTab] = useState("All");
   const [statusFilter, setStatusFilter] = useState("All statuses");
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -29,6 +43,7 @@ export default function App() {
   const [error, setError] = useState("");
 
   const loadApplications = async () => {
+    if (!token) return;
     try {
       setError("");
       const data = await getApplications();
@@ -46,6 +61,18 @@ export default function App() {
 
   useEffect(() => {
     loadApplications();
+  }, [token]);
+
+  useEffect(() => {
+    const expireSession = () => {
+      setToken(null);
+      setEmail("");
+      setApplications([]);
+      setSelectedId(null);
+      setSelectedApplication(null);
+    };
+    window.addEventListener("pipeline:auth-expired", expireSession);
+    return () => window.removeEventListener("pipeline:auth-expired", expireSession);
   }, []);
 
   useEffect(() => {
@@ -63,6 +90,45 @@ export default function App() {
     const text = `${app.role} ${app.company} ${app.location}`.toLowerCase();
     return matchesTab && matchesStatus && text.includes(search.toLowerCase());
   }), [applications, activeTab, statusFilter, search]);
+  const pageCount = Math.max(1, Math.ceil(visibleApplications.length / pageSize));
+  const pageApplications = visibleApplications.slice((page - 1) * pageSize, page * pageSize);
+
+  useEffect(() => {
+    setPage(1);
+  }, [activeTab, statusFilter, search]);
+
+  useEffect(() => {
+    if (!pageApplications.length) {
+      setSelectedId(null);
+      setSelectedApplication(null);
+      return;
+    }
+    if (!pageApplications.some((application) => application.id === selectedId)) {
+      setSelectedId(pageApplications[0].id);
+      setSelectedApplication(pageApplications[0]);
+    }
+  }, [pageApplications, selectedId]);
+
+  const authenticate = async (mode, credentials) => {
+    const result = mode === "register"
+      ? await registerUser(credentials)
+      : await loginUser(credentials);
+    localStorage.setItem("pipelineToken", result.token);
+    localStorage.setItem("pipelineEmail", result.user.email);
+    setToken(result.token);
+    setEmail(result.user.email);
+    setError("");
+  };
+
+  const logout = () => {
+    localStorage.removeItem("pipelineToken");
+    localStorage.removeItem("pipelineEmail");
+    setToken(null);
+    setEmail("");
+    setApplications([]);
+    setSelectedId(null);
+    setSelectedApplication(null);
+  };
 
   const createNewApplication = async (formData) => {
     try {
@@ -75,6 +141,7 @@ export default function App() {
       setActiveTab("All");
       setStatusFilter("All statuses");
       setSearch("");
+      setPage(1);
       return true;
     } catch (err) {
       setError(err.response?.data?.message || "Could not save the application. Please try again.");
@@ -90,13 +157,52 @@ export default function App() {
     review: applications.filter((app) => app.status === "Under Review").length,
     shortlisted: applications.filter((app) => app.status === "Shortlisted").length
   };
+  const latestJobNotifications = useMemo(
+    () => applications
+      .filter((application) => ["Internship", "Full-time"].includes(application.type))
+      .sort((first, second) =>
+        new Date(second.postedDate || second.appliedDate).getTime() -
+        new Date(first.postedDate || first.appliedDate).getTime()
+      )
+      .slice(0, 3),
+    [applications]
+  );
+
+  if (!token) {
+    return <AuthPage onAuthenticate={authenticate} />;
+  }
 
   return (
     <div className={`app-shell ${darkMode ? "dark" : ""}`}>
       <div className="app-frame">
-        <Header darkMode={darkMode} setDarkMode={setDarkMode} />
+        <Header
+          darkMode={darkMode}
+          setDarkMode={setDarkMode}
+          email={email}
+          onLogout={logout}
+          currentPage={currentPage}
+          setCurrentPage={setCurrentPage}
+          jobNotifications={latestJobNotifications}
+          onJobNotificationSelect={(applicationId) => {
+            setSelectedId(applicationId);
+            setCurrentPage("opportunities");
+          }}
+        />
 
-        <main id="main">
+        <main id="main" className={currentPage === "resume" ? "resume-main" : ""}>
+          {currentPage === "opportunities" ? (
+            <OpportunitiesPage
+              applications={applications}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+              onViewApplications={() => setCurrentPage("applications")}
+              loading={loading}
+              error={error}
+            />
+          ) : currentPage === "resume" ? (
+            <ResumePage email={email} />
+          ) : (
+            <>
           <section className="hero">
             <div>
               <p className="eyebrow">YOUR CAREER, ORGANIZED</p>
@@ -153,7 +259,7 @@ export default function App() {
               <div className="application-layout">
                 <section className="application-list" aria-label="Applications list">
                   <div className="list-caption">{visibleApplications.length} application{visibleApplications.length === 1 ? "" : "s"} found</div>
-                  {visibleApplications.length ? visibleApplications.map((application) => (
+                  {pageApplications.length ? pageApplications.map((application) => (
                     <ApplicationCard key={application.id} application={application} selected={application.id === selectedId} onSelect={setSelectedId} />
                   )) : (
                     <div className="empty-list">
@@ -162,11 +268,29 @@ export default function App() {
                       <p>Try changing the filters or add a new application.</p>
                     </div>
                   )}
+                  {visibleApplications.length > pageSize && (
+                    <div className="pagination" aria-label="Application pages">
+                      <span>
+                        Showing {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, visibleApplications.length)} of {visibleApplications.length}
+                      </span>
+                      <div>
+                        <button type="button" className="secondary-button" onClick={() => setPage((current) => current - 1)} disabled={page === 1}>
+                          Previous
+                        </button>
+                        <span className="page-number">Page {page} of {pageCount}</span>
+                        <button type="button" className="secondary-button" onClick={() => setPage((current) => current + 1)} disabled={page === pageCount}>
+                          Next
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </section>
-                <ApplicationDetails application={visibleApplications.find((item) => item.id === selectedId) || selectedApplication} />
+                <ApplicationDetails application={pageApplications.find((item) => item.id === selectedId) || selectedApplication} />
               </div>
             )}
           </section>
+            </>
+          )}
         </main>
 
         <footer className="footer">
