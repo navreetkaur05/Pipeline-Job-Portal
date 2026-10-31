@@ -1,5 +1,5 @@
 import { Bell, LogOut, Menu, Moon, Sun, X } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export default function Header({
   darkMode,
@@ -13,6 +13,10 @@ export default function Header({
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [profilePhoto, setProfilePhoto] = useState("");
+  const [photoError, setPhotoError] = useState("");
+  const photoInput = useRef(null);
+  const profilePhotoKey = `pipelineProfilePhoto:${email.toLowerCase()}`;
   const initials = email
     .split("@")[0]
     .split(/[._-]/)
@@ -30,6 +34,43 @@ export default function Header({
     setCurrentPage(page);
     setMenuOpen(false);
     setNotificationsOpen(false);
+  };
+
+  useEffect(() => {
+    setProfilePhoto(localStorage.getItem(profilePhotoKey) || "");
+    setPhotoError("");
+  }, [profilePhotoKey]);
+
+  const uploadProfilePhoto = (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      setPhotoError("Choose a JPG, PNG, or WebP image.");
+      return;
+    }
+    if (file.size > 1024 * 1024) {
+      setPhotoError("Profile photos must be 1 MB or smaller.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result !== "string") {
+        setPhotoError("Could not read that image. Please try another file.");
+        return;
+      }
+      try {
+        localStorage.setItem(profilePhotoKey, reader.result);
+        setProfilePhoto(reader.result);
+        setPhotoError("");
+      } catch {
+        setPhotoError("Could not save your photo in this browser. Try a smaller image.");
+      }
+    };
+    reader.onerror = () => setPhotoError("Could not read that image. Please try another file.");
+    reader.readAsDataURL(file);
   };
 
   return (
@@ -65,7 +106,23 @@ export default function Header({
           {darkMode ? <Sun size={16} /> : <Moon size={16} />}
           <span>{darkMode ? "Light" : "Dark"}</span>
         </button>
-        <div className="avatar" title={email}>{initials}</div>
+        <button
+          type="button"
+          className={`avatar profile-photo-button ${profilePhoto ? "has-profile-photo" : ""}`}
+          title="Upload profile photo"
+          aria-label="Upload profile photo"
+          onClick={() => photoInput.current?.click()}
+        >
+          {profilePhoto ? <img src={profilePhoto} alt="" /> : initials}
+        </button>
+        <input
+          ref={photoInput}
+          className="profile-photo-input"
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          aria-label="Choose profile photo"
+          onChange={uploadProfilePhoto}
+        />
         <button className="logout-button" onClick={onLogout} aria-label="Sign out" title="Sign out">
           <LogOut size={17} />
           <span>Sign out</span>
@@ -111,6 +168,7 @@ export default function Header({
           ) : (
             <p className="notification-empty">No job notifications yet.</p>
           )}
+          {photoError && <p className="profile-photo-error" role="alert">{photoError}</p>}
         </section>
       )}
     </header>

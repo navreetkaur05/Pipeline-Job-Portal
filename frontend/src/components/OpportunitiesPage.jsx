@@ -1,9 +1,10 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { BriefcaseBusiness, Search } from "lucide-react";
 import ApplicationCard from "./ApplicationCard.jsx";
 import ApplicationDetails from "./ApplicationDetails.jsx";
 
 const opportunityTypes = ["All opportunities", "Internship", "Full-time", "Scholarship", "Training"];
+const pageSize = 3;
 
 export default function OpportunitiesPage({
   applications,
@@ -16,9 +17,10 @@ export default function OpportunitiesPage({
   const [search, setSearch] = useState("");
   const [type, setType] = useState("All opportunities");
   const [statusFilter, setStatusFilter] = useState("All statuses");
+  const [page, setPage] = useState(1);
 
   const opportunities = useMemo(() => applications.filter((application) => {
-    const text = `${application.role} ${application.company} ${application.location}`.toLowerCase();
+    const text = `${application.role} ${application.company} ${application.location} ${application.type}`.toLowerCase();
     return (
       (type === "All opportunities" || application.type === type) &&
       (statusFilter === "All statuses" || application.status === statusFilter) &&
@@ -26,8 +28,20 @@ export default function OpportunitiesPage({
     );
   }), [applications, search, statusFilter, type]);
 
+  const pageCount = Math.max(1, Math.ceil(opportunities.length / pageSize));
+  const pageOpportunities = opportunities.slice((page - 1) * pageSize, page * pageSize);
   const opportunityLabel = (count) => `matching opportunit${count === 1 ? "y" : "ies"}`;
   const selectedOpportunity = opportunities.find((item) => item.id === selectedId);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter, type]);
+
+  useEffect(() => {
+    if (pageOpportunities.length && !pageOpportunities.some((item) => item.id === selectedId)) {
+      onSelect(pageOpportunities[0].id);
+    }
+  }, [onSelect, pageOpportunities, selectedId]);
 
   return (
     <>
@@ -72,7 +86,7 @@ export default function OpportunitiesPage({
           <div className="opportunity-layout">
             <section className="application-list" aria-label="Available opportunities">
               <div className="list-caption">{opportunities.length} {opportunities.length === 1 ? "opportunity" : "opportunities"} found</div>
-              {opportunities.length ? opportunities.map((opportunity) => (
+              {pageOpportunities.length ? pageOpportunities.map((opportunity) => (
                 <ApplicationCard
                   key={opportunity.id}
                   application={opportunity}
@@ -85,6 +99,22 @@ export default function OpportunitiesPage({
                   <strong>No opportunities found</strong>
                   <p>Try a different search or filter.</p>
                 </div>
+              )}
+              {opportunities.length > pageSize && (
+                <nav className="pagination opportunity-pagination" aria-label="Opportunity pages">
+                  <span>
+                    Showing {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, opportunities.length)} of {opportunities.length}
+                  </span>
+                  <div>
+                    <button type="button" className="secondary-button" onClick={() => setPage((current) => current - 1)} disabled={page === 1}>
+                      Previous
+                    </button>
+                    <span className="page-number">Page {page} of {pageCount}</span>
+                    <button type="button" className="secondary-button" onClick={() => setPage((current) => current + 1)} disabled={page === pageCount}>
+                      Next
+                    </button>
+                  </div>
+                </nav>
               )}
             </section>
             <div className="opportunity-detail">

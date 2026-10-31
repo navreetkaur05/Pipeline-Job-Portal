@@ -4,7 +4,10 @@ A responsive job/internship application tracker based on the uploaded Pipeline d
 
 The signed-in UI includes an Opportunities page with searchable listings and a
 resume builder with a live preview. Resume details are saved in the current
-browser per account; use **Print / Save PDF** to export the preview.
+browser per account; use **Print / Save PDF** to export the preview. Opportunity
+search and pagination are available on both the opportunities and applications
+pages. Select the profile avatar to upload a JPG, PNG, or WebP photo (up to 1 MB);
+photos are saved in the current browser per account.
 
 ## Requirements
 - Node.js (LTS recommended)
