@@ -7,6 +7,7 @@ import ApplicationDetails from "./components/ApplicationDetails.jsx";
 import AddApplicationForm from "./components/AddApplicationForm.jsx";
 import OpportunitiesPage from "./components/OpportunitiesPage.jsx";
 import ResumePage from "./components/ResumePage.jsx";
+import ProfilePage from "./components/ProfilePage.jsx";
 import {
   createApplication,
   getApplicationById,
@@ -183,6 +184,8 @@ export default function App() {
           currentPage={currentPage}
           setCurrentPage={setCurrentPage}
           jobNotifications={latestJobNotifications}
+          applicationCount={applications.length}
+          shortlistedCount={counts.shortlisted}
           onJobNotificationSelect={(applicationId) => {
             setSelectedId(applicationId);
             setCurrentPage("opportunities");
@@ -201,6 +204,12 @@ export default function App() {
             />
           ) : currentPage === "resume" ? (
             <ResumePage email={email} />
+          ) : currentPage === "profile" ? (
+            <ProfilePage
+              email={email}
+              applications={applications}
+              onEditResume={() => setCurrentPage("resume")}
+            />
           ) : (
             <>
           <section className="hero">

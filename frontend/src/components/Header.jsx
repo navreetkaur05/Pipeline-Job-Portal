@@ -1,5 +1,39 @@
-import { Bell, LogOut, Menu, Moon, Sun, X } from "lucide-react";
+import {
+  Bell,
+  BriefcaseBusiness,
+  ChevronRight,
+  FileText,
+  LogOut,
+  Menu,
+  Moon,
+  Sun,
+  Trophy,
+  UserRound,
+  X
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+
+const getProfile = (email) => {
+  try {
+    const savedResume = JSON.parse(localStorage.getItem(`pipelineResume:${email.toLowerCase()}`));
+    const completedFields = [
+      savedResume?.name,
+      savedResume?.title,
+      savedResume?.location,
+      savedResume?.summary,
+      savedResume?.skills,
+      Array.isArray(savedResume?.experience) && savedResume.experience.some((entry) => entry?.role || entry?.company),
+      Array.isArray(savedResume?.education) && savedResume.education.some((entry) => entry?.degree || entry?.school)
+    ].filter(Boolean).length;
+    return {
+      name: typeof savedResume?.name === "string" ? savedResume.name : "",
+      title: typeof savedResume?.title === "string" ? savedResume.title : "",
+      completion: Math.round((completedFields / 7) * 100)
+    };
+  } catch {
+    return { name: "", title: "", completion: 0 };
+  }
+};
 
 export default function Header({
   darkMode,
@@ -9,14 +43,19 @@ export default function Header({
   currentPage,
   setCurrentPage,
   jobNotifications,
+  applicationCount,
+  shortlistedCount,
   onJobNotificationSelect
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [profilePhoto, setProfilePhoto] = useState("");
   const [photoError, setPhotoError] = useState("");
   const photoInput = useRef(null);
+  const headerRef = useRef(null);
   const profilePhotoKey = `pipelineProfilePhoto:${email.toLowerCase()}`;
+  const [profile, setProfile] = useState({ name: "", title: "", completion: 0 });
   const initials = email
     .split("@")[0]
     .split(/[._-]/)
@@ -34,12 +73,35 @@ export default function Header({
     setCurrentPage(page);
     setMenuOpen(false);
     setNotificationsOpen(false);
+    setProfileOpen(false);
   };
 
   useEffect(() => {
     setProfilePhoto(localStorage.getItem(profilePhotoKey) || "");
     setPhotoError("");
-  }, [profilePhotoKey]);
+    setProfile(getProfile(email));
+  }, [email, profilePhotoKey]);
+
+  useEffect(() => {
+    const handlePointerDown = (event) => {
+      if (!headerRef.current?.contains(event.target)) {
+        setProfileOpen(false);
+        setNotificationsOpen(false);
+      }
+    };
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setProfileOpen(false);
+        setNotificationsOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
 
   const uploadProfilePhoto = (event) => {
     const file = event.target.files?.[0];
@@ -74,7 +136,7 @@ export default function Header({
   };
 
   return (
-    <header className="header">
+    <header className="header" ref={headerRef}>
       <button type="button" className="brand brand-button" onClick={() => navigate("applications")}>Pipeline<span>.</span></button>
       <nav className={`desktop-nav ${menuOpen ? "nav-open" : ""}`} aria-label="Main navigation">
         {navigation.map(({ id, label }) => (
@@ -109,9 +171,15 @@ export default function Header({
         <button
           type="button"
           className={`avatar profile-photo-button ${profilePhoto ? "has-profile-photo" : ""}`}
-          title="Upload profile photo"
-          aria-label="Upload profile photo"
-          onClick={() => photoInput.current?.click()}
+          title="Open profile menu"
+          aria-label="Open profile menu"
+          aria-expanded={profileOpen}
+          aria-controls="profile-menu"
+          onClick={() => {
+            setProfile(getProfile(email));
+            setProfileOpen((open) => !open);
+            setNotificationsOpen(false);
+          }}
         >
           {profilePhoto ? <img src={profilePhoto} alt="" /> : initials}
         </button>
@@ -168,7 +236,42 @@ export default function Header({
           ) : (
             <p className="notification-empty">No job notifications yet.</p>
           )}
+        </section>
+      )}
+      {profileOpen && (
+        <section className="profile-menu-panel" id="profile-menu" aria-label="Profile menu">
+          <div className="profile-menu-overview">
+            <div className="profile-menu-identity">
+              <button
+                type="button"
+                className={`profile-menu-avatar ${profilePhoto ? "has-profile-photo" : ""}`}
+                style={{ "--profile-progress": `${profile.completion}%` }}
+                aria-label="Change profile photo"
+                onClick={() => photoInput.current?.click()}
+              >
+                {profilePhoto ? <img src={profilePhoto} alt="" /> : initials}
+              </button>
+              <div className="profile-menu-person">
+                <strong>{profile.name || email.split("@")[0]}</strong>
+                <span>{email}</span>
+                {profile.title && <small>{profile.title}</small>}
+              </div>
+            </div>
+            <button type="button" className="profile-view-button" onClick={() => navigate("profile")}>
+              View Profile <ChevronRight size={17} />
+            </button>
+          </div>
+          <div className="profile-menu-stats">
+            <div><BriefcaseBusiness size={17} /><strong>{applicationCount}</strong><span>Applications</span></div>
+            <div><Trophy size={17} /><strong>{shortlistedCount}</strong><span>Shortlisted</span></div>
+          </div>
           {photoError && <p className="profile-photo-error" role="alert">{photoError}</p>}
+          <div className="profile-menu-links">
+            <button type="button" onClick={() => navigate("applications")}><BriefcaseBusiness size={18} /> My applications</button>
+            <button type="button" onClick={() => navigate("resume")}><FileText size={18} /> Resume builder</button>
+            <button type="button" onClick={() => navigate("profile")}><UserRound size={18} /> Profile details</button>
+            <button type="button" className="profile-menu-logout" onClick={onLogout}><LogOut size={18} /> Sign out</button>
+          </div>
         </section>
       )}
     </header>

@@ -250,6 +250,11 @@ export default function ResumePage({ email }) {
               </section>
             )}
           </div>
+          <div className="resume-preview-actions">
+            <button type="button" className="primary-button" onClick={() => window.print()}>
+              <Printer size={17} /> Print / Save PDF
+            </button>
+          </div>
         </article>
       </section>
     </>
